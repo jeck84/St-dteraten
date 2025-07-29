@@ -6,71 +6,75 @@
 <title>Städte-Ratespiel Deutschland</title>
 <style>
   html, body {
-    margin:0; padding:0; height:100%; font-family: Arial, sans-serif; font-size: 1.1em;
+    margin: 0; padding: 0; height: 100%; font-family: Arial, sans-serif; font-size: 1.1em;
   }
-  #map { width: 100%; height: 75vh; position: relative; }
+  #map {
+    height: 75vh; width: 100%;
+  }
   #info {
-    padding: 12px;
+    padding: 12px 16px;
     background: #f8f8f8;
-    display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
   }
-  #cityName { font-weight: bold; font-size: 1.2em; flex:1 1 100%; }
-  #score, #highscore, #round { font-weight: bold; margin-right: 12px; }
+  #cityName {
+    font-weight: bold;
+    font-size: 1.3em;
+    flex-grow: 1;
+  }
+  span {
+    font-weight: bold;
+    margin-left: 10px;
+  }
   button {
+    background: #007bff;
+    border: none;
+    color: white;
     padding: 10px 16px;
-    font-size: 1em;
     border-radius: 6px;
     cursor: pointer;
-    border:none;
-    background: #007bff;
-    color: white;
-    transition: background-color 0.3s;
+    font-size: 1em;
   }
-  button:disabled {
-    background: #aaa;
-    cursor: default;
-  }
-  button:hover:not(:disabled) {
+  button:hover {
     background: #0056b3;
   }
   #popup {
     position: absolute;
-    padding: 10px 14px;
+    pointer-events: none;
+    background: rgba(255,255,255,0.9);
     border-radius: 6px;
+    padding: 8px 12px;
     font-weight: bold;
     display: none;
     z-index: 1000;
-    pointer-events: none;
-    box-shadow: 0 0 8px rgba(0,0,0,0.3);
-    background: rgba(255,255,255,0.9);
-    color: #000;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
   }
-  /* Fadenkreuz am Ziel */
-  .crosshair {
-    width: 24px;
-    height: 24px;
-    border: 3px solid red;
-    border-radius: 50%;
-    box-sizing: border-box;
-    background: transparent;
-    pointer-events: none;
-  }
-  /* Zusammenfassungs-Popup */
   #summaryPopup {
     position: fixed;
-    top: 50%; left: 50%;
+    top: 50%;
+    left: 50%;
     transform: translate(-50%, -50%);
-    background: #007bff;
-    color: white;
-    padding: 20px 30px;
-    border-radius: 12px;
+    background: white;
+    padding: 24px 32px;
     font-size: 1.3em;
     font-weight: bold;
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
     display: none;
     z-index: 2000;
-    box-shadow: 0 0 15px rgba(0,0,0,0.5);
     text-align: center;
-    max-width: 90vw;
+  }
+  /* Rotes rundes Fadenkreuz */
+  .crosshair {
+    width: 30px;
+    height: 30px;
+    border: 3px solid red;
+    border-radius: 50%;
+    background: transparent;
+    box-sizing: border-box;
   }
 </style>
 <link
@@ -80,192 +84,241 @@
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
 </head>
 <body>
-<div id="info">
-  <div id="cityName">Klicke auf die Karte, um die Stadt oder Sehenswürdigkeit zu lokalisieren!</div>
-  <div>
-    <span id="round">Frage: 0 / 10</span>
-    <span id="score">Punkte: 0</span>
-    <span id="highscore">Highscore: 0</span>
+  <div id="info">
+    <div id="cityName">Klicke auf die Karte, um die Stadt oder Sehenswürdigkeit zu lokalisieren!</div>
+    <div>
+      <span id="round">Frage: 0 / 10</span>
+      <span id="score">Punkte: 0</span>
+      <span id="highscore">Highscore: 0</span>
+      <button id="nextBtn" disabled>Nächstes Ziel</button>
+      <button id="newGameBtn">Neues Spiel</button>
+    </div>
   </div>
-  <div>
-    <button id="nextBtn" onclick="nextRound()" disabled>Nächstes Ziel</button>
-    <button id="newGameBtn" onclick="newGame()">Neues Spiel</button>
-  </div>
-</div>
-<div id="popup"></div>
-<div id="map"></div>
-<div id="summaryPopup"></div>
+  <div id="popup"></div>
+  <div id="summaryPopup"></div>
+  <div id="map"></div>
 
 <script>
-const MAPTILER_API_KEY = "Ata7fzCIWNX2Y9WUthnN";
+  const MAPTILER_API_KEY = "Ata7fzCIWNX2Y9WUthnN";
 
-const locations = [
-  { name: "Berlin", lat: 52.5200, lon: 13.4050 },
-  { name: "Hamburg", lat: 53.5511, lon: 9.9937 },
-  { name: "München", lat: 48.1351, lon: 11.5820 },
-  { name: "Kölner Dom", lat: 50.9413, lon: 6.9583 },
-  { name: "Frankfurt am Main", lat: 50.1109, lon: 8.6821 },
-  { name: "Dresden", lat: 51.0504, lon: 13.7373 },
-  { name: "Schloss Neuschwanstein", lat: 47.5576, lon: 10.7498 },
-  { name: "Brandenburger Tor", lat: 52.5163, lon: 13.3777 },
-  { name: "Heidelberg", lat: 49.3988, lon: 8.6724 },
-  { name: "Leipzig", lat: 51.3397, lon: 12.3731 },
-];
+  const locations = [
+    { name: "Berlin", lat: 52.5200, lon: 13.4050 },
+    { name: "Hamburg", lat: 53.5511, lon: 9.9937 },
+    { name: "München", lat: 48.1351, lon: 11.5820 },
+    { name: "Kölner Dom", lat: 50.9413, lon: 6.9583 },
+    { name: "Frankfurt am Main", lat: 50.1109, lon: 8.6821 },
+    { name: "Dresden", lat: 51.0504, lon: 13.7373 },
+    { name: "Schloss Neuschwanstein", lat: 47.5576, lon: 10.7498 },
+    { name: "Brandenburger Tor", lat: 52.5163, lon: 13.3777 },
+    { name: "Heidelberg", lat: 49.3988, lon: 8.6724 },
+    { name: "Leipzig", lat: 51.3397, lon: 12.3731 },
+  ];
 
-let map = L.map("map").setView([51.1657, 10.4515], 6);
+  const maxRounds = 10;
+  let map = L.map("map").setView([51.1657, 10.4515], 6);
 
-const tileLayerLight = L.tileLayer(
-  `https://api.maptiler.com/maps/basic-v2/256/{z}/{x}/{y}.png?key=${MAPTILER_API_KEY}`, {
-    attribution:
-      '&copy; <a href="https://www.maptiler.com/">MapTiler</a> &copy; OpenStreetMap contributors',
-    maxZoom: 18,
-  }
-).addTo(map);
+  // Nur Light Map ohne Beschriftungen von MapTiler
+  const tileLayerLight = L.tileLayer(
+    `https://api.maptiler.com/maps/basic-v2/256/{z}/{x}/{y}.png?key=${MAPTILER_API_KEY}`, {
+      attribution: '&copy; <a href="https://www.maptiler.com/">MapTiler</a> &copy; OpenStreetMap contributors',
+      maxZoom: 18,
+    }
+  ).addTo(map);
 
-let target = null;
-let score = 0;
-let highscore = 0;
-let round = 0;
-let currentLine = null;
-let currentMarker = null;
-let gameStartTime = null;
+  // UI Elemente
+  const cityNameDiv = document.getElementById("cityName");
+  const roundSpan = document.getElementById("round");
+  const scoreSpan = document.getElementById("score");
+  const highscoreSpan = document.getElementById("highscore");
+  const nextBtn = document.getElementById("nextBtn");
+  const newGameBtn = document.getElementById("newGameBtn");
+  const popup = document.getElementById("popup");
+  const summaryPopup = document.getElementById("summaryPopup");
 
-const maxRounds = 10;
+  // Variablen
+  let target = null;
+  let score = 0;
+  let highscore = 0;
+  let round = 0;
+  let currentLine = null;
+  let currentMarker = null;
+  let gameStartTime = null;
+  let summaryTimeout = null;
 
-const cityNameDiv = document.getElementById("cityName");
-const roundSpan = document.getElementById("round");
-const scoreSpan = document.getElementById("score");
-const highscoreSpan = document.getElementById("highscore");
-const nextBtn = document.getElementById("nextBtn");
-const popup = document.getElementById("popup");
-const summaryPopup = document.getElementById("summaryPopup");
-
-function calcPoints(distanceKm) {
-  if (distanceKm <= 10) return 100;
-  const reduction = Math.floor(distanceKm / 100) * 10;
-  return Math.max(0, 100 - reduction);
-}
-
-const crosshairIcon = L.divIcon({
-  className: "crosshair",
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
-  popupAnchor: [0, -12],
-});
-
-function nextRound() {
-  if (round >= maxRounds) {
-    return;
+  // Shuffle-Funktion für keine doppelten Ziele
+  function shuffleArray(arr) {
+    const a = arr.slice();
+    for (let i = a.length -1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i+1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
   }
 
-  round++;
-  roundSpan.textContent = `Frage: ${round} / ${maxRounds}`;
-  cityNameDiv.textContent = `Wo befindet sich: ${locations[round - 1].name}?`;
-  nextBtn.disabled = true;
+  let shuffledLocations = [];
+  let currentIndex = 0;
 
-  if (currentLine) {
-    map.removeLayer(currentLine);
-    currentLine = null;
-  }
-  if (currentMarker) {
-    map.removeLayer(currentMarker);
-    currentMarker = null;
+  // Punkteberechnung nach Entfernung
+  // 10 km = 100 Punkte, ab 100 km jeweils -10 Punkte pro 100 km, min 0, max 100
+  function calcPoints(distanceKm) {
+    if(distanceKm <= 10) return 100;
+    let penalty = Math.floor(distanceKm / 100) * 10;
+    let points = 100 - penalty;
+    return points < 0 ? 0 : points > 100 ? 100 : points;
   }
 
-  target = locations[round - 1];
+  // Rotes rundes Fadenkreuz als DivIcon
+  const crosshairIcon = L.divIcon({
+    className: "crosshair",
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -15]
+  });
 
-  if (round === 1) {
-    gameStartTime = Date.now();
-  }
-}
+  // Neues Spiel starten
+  function newGame() {
+    score = 0;
+    round = 0;
+    currentIndex = 0;
+    shuffledLocations = shuffleArray(locations);
 
-map.on("click", function (e) {
-  if (!target || nextBtn.disabled === false) {
-    return;
-  }
+    cityNameDiv.textContent = "Klicke auf die Karte, um die Stadt oder Sehenswürdigkeit zu lokalisieren!";
+    scoreSpan.textContent = "Punkte: 0";
+    roundSpan.textContent = `Frage: 0 / ${maxRounds}`;
+    summaryPopup.style.display = "none";
+    popup.style.display = "none";
+    nextBtn.disabled = true;
 
-  if (currentLine) {
-    map.removeLayer(currentLine);
-    currentLine = null;
-  }
-  if (currentMarker) {
-    map.removeLayer(currentMarker);
-    currentMarker = null;
-  }
+    if(currentLine) {
+      map.removeLayer(currentLine);
+      currentLine = null;
+    }
+    if(currentMarker) {
+      map.removeLayer(currentMarker);
+      currentMarker = null;
+    }
+    target = null;
+    gameStartTime = null;
 
-  const guessLatLng = e.latlng;
-  const targetLatLng = L.latLng(target.lat, target.lon);
-
-  currentLine = L.polyline([guessLatLng, targetLatLng], { color: "blue" }).addTo(map);
-  currentMarker = L.marker(targetLatLng, { icon: crosshairIcon }).addTo(map);
-
-  const distance = guessLatLng.distanceTo(targetLatLng) / 1000;
-  const points = calcPoints(distance);
-  score += points;
-  scoreSpan.textContent = `Punkte: ${score}`;
-
-  // Popup neben Linie positionieren, leicht versetzt vom Klickpunkt
-  const popupOffset = 20; // Pixel nach rechts und oben
-  const containerPoint = map.latLngToContainerPoint(guessLatLng);
-  popup.style.left = (containerPoint.x + popupOffset) + "px";
-  popup.style.top = (containerPoint.y - popupOffset) + "px";
-  popup.textContent = `Entfernung: ${distance.toFixed(1)} km → +${points} Punkte`;
-  popup.style.display = "block";
-
-  nextBtn.disabled = false;
-
-  if (round === maxRounds) {
-    setTimeout(showSummary, 4000);
-  }
-});
-
-function showSummary() {
-  const totalTimeSec = ((Date.now() - gameStartTime) / 1000).toFixed(1);
-
-  summaryPopup.innerHTML =
-    `Spiel beendet!<br>` +
-    `Dein Highscore: <b>${Math.max(highscore, score)}</b><br>` +
-    `Deine Punktzahl: <b>${score}</b><br>` +
-    `Benötigte Gesamtzeit: <b>${totalTimeSec} Sekunden</b>`;
-
-  summaryPopup.style.display = "block";
-
-  if (score > highscore) {
-    highscore = score;
-    highscoreSpan.textContent = `Highscore: ${highscore}`;
+    nextRound();
   }
 
-  target = null;
-  nextBtn.disabled = true;
-  cityNameDiv.textContent = "Spiel beendet!";
-}
+  // Zur nächsten Frage springen
+  function nextRound() {
+    if(round >= maxRounds) {
+      return;
+    }
+    if(currentIndex >= shuffledLocations.length) {
+      alert("Keine weiteren Ziele verfügbar.");
+      return;
+    }
+    round++;
+    roundSpan.textContent = `Frage: ${round} / ${maxRounds}`;
+    target = shuffledLocations[currentIndex];
+    currentIndex++;
 
-function newGame() {
-  score = 0;
-  round = 0;
-  cityNameDiv.textContent = "Klicke auf die Karte, um die Stadt oder Sehenswürdigkeit zu lokalisieren!";
-  scoreSpan.textContent = "Punkte: 0";
-  roundSpan.textContent = `Frage: 0 / ${maxRounds}`;
-  summaryPopup.style.display = "none";
-  popup.style.display = "none";
-  nextBtn.disabled = true;
+    cityNameDiv.textContent = `Wo befindet sich: ${target.name}?`;
+    nextBtn.disabled = true;
 
-  if (currentLine) {
-    map.removeLayer(currentLine);
-    currentLine = null;
+    if(currentLine) {
+      map.removeLayer(currentLine);
+      currentLine = null;
+    }
+    if(currentMarker) {
+      map.removeLayer(currentMarker);
+      currentMarker = null;
+    }
+
+    popup.style.display = "none";
+
+    if(round === 1) {
+      gameStartTime = new Date();
+    }
   }
-  if (currentMarker) {
-    map.removeLayer(currentMarker);
-    currentMarker = null;
+
+  // Popup anzeigen neben Klickpunkt (leicht nach rechts versetzt)
+  function showPopup(text, latlng) {
+    const point = map.latLngToContainerPoint(latlng);
+    popup.style.left = (point.x + 15) + "px";
+    popup.style.top = (point.y - 20) + "px";
+    popup.textContent = text;
+    popup.style.display = "block";
   }
 
-  target = null;
+  // Nach dem letzten Ziel Zusammenfassung anzeigen (bleibt sichtbar)
+  function showSummary() {
+    let gameEndTime = new Date();
+    let durationSec = Math.round((gameEndTime - gameStartTime) / 1000);
+    if(score > highscore) {
+      highscore = score;
+      highscoreSpan.textContent = `Highscore: ${highscore}`;
+    }
+    summaryPopup.innerHTML = `Spiel vorbei!<br/>Gesamtpunktzahl: ${score}<br/>Benötigte Zeit: ${durationSec} Sekunden`;
+    summaryPopup.style.display = "block";
+  }
 
-  nextRound();
-}
+  // Karte Klick-Handler
+  map.on("click", function (e) {
+    if(!target) return;
 
-// Spiel direkt starten
-newGame();
+    if(currentLine) {
+      map.removeLayer(currentLine);
+      currentLine = null;
+    }
+    if(currentMarker) {
+      map.removeLayer(currentMarker);
+      currentMarker = null;
+    }
+
+    // Entfernung berechnen (in km)
+    const distance = map.distance(e.latlng, L.latLng(target.lat, target.lon)) / 1000;
+    const points = calcPoints(distance);
+    score += points;
+    scoreSpan.textContent = `Punkte: ${score}`;
+
+    // Linie vom Klick zum Ziel
+    currentLine = L.polyline([e.latlng, [target.lat, target.lon]], {
+      color: "#FF5733",
+      weight: 4,
+      opacity: 0.9
+    }).addTo(map);
+
+    // Fadenkreuz am Ziel
+    currentMarker = L.marker([target.lat, target.lon], { icon: crosshairIcon }).addTo(map);
+
+    // Popup neben Klickpunkt
+    showPopup(`${target.name} war ${distance.toFixed(1)} km entfernt. Punkte: ${points}`, e.latlng);
+
+    target = null;
+    nextBtn.disabled = false;
+
+    // Wenn letzte Runde, Zusammenfassung mit 4s Verzögerung anzeigen
+    if(round === maxRounds) {
+      if(summaryTimeout) clearTimeout(summaryTimeout);
+      summaryTimeout = setTimeout(showSummary, 4000);
+    }
+  });
+
+  nextBtn.addEventListener("click", () => {
+    nextBtn.disabled = true;
+    popup.style.display = "none";
+    if(currentLine) {
+      map.removeLayer(currentLine);
+      currentLine = null;
+    }
+    if(currentMarker) {
+      map.removeLayer(currentMarker);
+      currentMarker = null;
+    }
+    nextRound();
+  });
+
+  newGameBtn.addEventListener("click", () => {
+    newGame();
+  });
+
+  // Spiel direkt starten
+  newGame();
 </script>
 </body>
 </html>

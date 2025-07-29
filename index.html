@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Städte-Ratespiel Deutschland</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial, sans-serif;
+    }
+    #map {
+      width: 100%;
+      height: 85vh;
+    }
+    #info {
+      padding: 10px;
+      background: #f0f0f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    #score, #highscore, #timer, #round {
+      font-weight: bold;
+      margin-right: 20px;
+    }
+    button {
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css" />
+</head>
+<body>
+  <div id="info">
+    <div id="cityName">Klicke auf die Karte, um die Stadt oder Sehenswürdigkeit zu lokalisieren!</div>
+    <div>
+      <span id="round">Frage: 1 / 10</span>
+      <span id="score">Punkte: 0</span>
+      <span id="highscore">Highscore: 0</span>
+      <span id="timer">Zeit: 15</span>
+    </div>
+    <button onclick="nextRound()">Nächste Runde</button>
+  </div>
+  <div id="map"></div>
+
+  <script>
+    const locations = [
+      { name: "Berlin", lat: 52.52, lon: 13.405 },
+      { name: "Hamburg", lat: 53.55, lon: 10.0 },
+      { name: "München", lat: 48.137, lon: 11.575 },
+      { name: "Köln", lat: 50.9375, lon: 6.9603 },
+      { name: "Frankfurt am Main", lat: 50.1109, lon: 8.6821 },
+      { name: "Stuttgart", lat: 48.7758, lon: 9.1829 },
+      { name: "Düsseldorf", lat: 51.2277, lon: 6.7735 },
+      { name: "Leipzig", lat: 51.3397, lon: 12.3731 },
+      { name: "Dortmund", lat: 51.5136, lon: 7.4653 },
+      { name: "Essen", lat: 51.4556, lon: 7.0116 },
+      { name: "Bremen", lat: 53.0793, lon: 8.8017 },
+      { name: "Hannover", lat: 52.3759, lon: 9.732 },
+      { name: "Nürnberg", lat: 49.4521, lon: 11.0767 },
+      { name: "Dresden", lat: 51.0504, lon: 13.7373 },
+      { name: "Bochum", lat: 51.4818, lon: 7.2162 },
+      { name: "Wuppertal", lat: 51.2562, lon: 7.1508 },
+      { name: "Bielefeld", lat: 52.0302, lon: 8.5325 },
+      { name: "Bonn", lat: 50.7374, lon: 7.0982 },
+      { name: "Mannheim", lat: 49.4875, lon: 8.466 },
+      { name: "Karlsruhe", lat: 49.0069, lon: 8.4037 },
+
+      // Sehenswürdigkeiten
+      { name: "Brandenburger Tor", lat: 52.5163, lon: 13.3777 },
+      { name: "Kölner Dom", lat: 50.9413, lon: 6.9583 },
+      { name: "Neuschwanstein", lat: 47.5576, lon: 10.7498 },
+      { name: "Heidelberger Schloss", lat: 49.4106, lon: 8.7156 },
+      { name: "Reichstag", lat: 52.5186, lon: 13.3762 },
+      { name: "Zugspitze", lat: 47.4211, lon: 10.9847 },
+      { name: "Sanssouci", lat: 52.4043, lon: 13.0384 },
+      { name: "Holstentor", lat: 53.865, lon: 10.686 },
+      { name: "Wartburg", lat: 50.9669, lon: 10.3074 },
+      { name: "Berliner Fernsehturm", lat: 52.5208, lon: 13.4095 },
+      { name: "Miniatur Wunderland", lat: 53.5438, lon: 9.9882 },
+      { name: "Schloss Schwerin", lat: 53.6355, lon: 11.4175 },
+      { name: "Aachener Dom", lat: 50.7753, lon: 6.0839 },
+      { name: "Schloss Charlottenburg", lat: 52.5201, lon: 13.2956 },
+      { name: "Allianz Arena", lat: 48.2188, lon: 11.6247 },
+      { name: "Viktualienmarkt", lat: 48.1351, lon: 11.5769 },
+      { name: "Burg Hohenzollern", lat: 48.3256, lon: 8.9634 },
+      { name: "Autostadt Wolfsburg", lat: 52.4345, lon: 10.7994 },
+      { name: "Brocken", lat: 51.7991, lon: 10.6144 },
+      { name: "Deutsches Museum", lat: 48.1303, lon: 11.582 },
+    ];
+
+    let currentLocation;
+    let score = 0;
+    let highscore = 0;
+    let round = 0;
+    let maxRounds = 10;
+    let timer;
+    let countdown = 15;
+    let guessMade = false;
+
+    const map = L.map('map').setView([51.1657, 10.4515], 6);
+    const baseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap & CartoDB',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+
+    function distanceInKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+
+    function updateHUD() {
+      document.getElementById('score').textContent = `Punkte: ${score}`;
+      document.getElementById('highscore').textContent = `Highscore: ${highscore}`;
+      document.getElementById('round').textContent = `Frage: ${round} / ${maxRounds}`;
+    }
+
+    function resetMap() {
+      map.eachLayer(layer => {
+        if (layer instanceof L.Marker || layer instanceof L.Polyline) {
+          map.removeLayer(layer);
+        }
+      });
+      baseLayer.addTo(map);
+    }
+
+    function endGame() {
+      alert(`Spiel vorbei! Dein Punktestand: ${score}`);
+      if (score > highscore) highscore = score;
+      score = 0;
+      round = 0;
+      updateHUD();
+    }
+
+    function nextRound() {
+      clearInterval(timer);
+      if (round >= maxRounds) {
+        endGame();
+        return;
+      }
+
+      guessMade = false;
+      resetMap();
+      round++;
+      currentLocation = locations[Math.floor(Math.random() * locations.length)];
+      document.getElementById('cityName').textContent = `Wo liegt ${currentLocation.name}?`;
+      updateHUD();
+      startTimer();
+    }
+
+    function startTimer() {
+      countdown = 15;
+      document.getElementById('timer').textContent = `Zeit: ${countdown}`;
+      timer = setInterval(() => {
+        countdown--;
+        document.getElementById('timer').textContent = `Zeit: ${countdown}`;
+        if (countdown <= 0 && !guessMade) {
+          clearInterval(timer);
+          document.getElementById('cityName').textContent = `${currentLocation.name} wurde nicht rechtzeitig gefunden.`;
+          setTimeout(nextRound, 2000);
+        }
+      }, 1000);
+    }
+
+    map.on('click', function(e) {
+      if (!currentLocation || guessMade) return;
+      guessMade = true;
+      clearInterval(timer);
+      const target = currentLocation; // Lokale Kopie sichern
+      const guessedLat = e.latlng.lat;
+      const guessedLon = e.latlng.lng;
+      const dist = distanceInKm(guessedLat, guessedLon, target.lat, target.lon);
+
+      L.marker([guessedLat, guessedLon]).addTo(map);
+      L.marker([target.lat, target.lon]).addTo(map);
+      L.polyline([[guessedLat, guessedLon], [target.lat, target.lon]], { color: 'red' }).addTo(map);
+
+      const points = Math.max(0, Math.round(100 - dist));
+      score += points;
+      document.getElementById('cityName').textContent = `${target.name} war ${dist.toFixed(2)} km entfernt. Du hast ${points} Punkte erhalten.`;
+      updateHUD();
+
+      setTimeout(nextRound, 3000);
+    });
+
+    // Starte Spiel
+    nextRound();
+  </script>
+</body>
+</html>

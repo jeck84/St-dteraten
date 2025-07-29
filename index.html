@@ -1,312 +1,265 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Städte-Ratespiel Deutschland</title>
-  <style>
-    html, body {
-      margin: 0; padding: 0; height: 100%; font-family: Arial, sans-serif; font-size: 1.1em;
-    }
-    #map {
-      width: 100%; height: 75vh; position: relative;
-    }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Städte-Ratespiel Deutschland</title>
+<style>
+  html, body { margin:0; padding:0; height:100%; font-family: Arial, sans-serif; font-size: 1.1em; }
+  #map { width: 100%; height: 75vh; position: relative; }
+  #info {
+    padding: 16px; background: #f8f8f8; display: flex; flex-direction: column; gap: 12px; align-items: flex-start;
+  }
+  #info > div { display: flex; flex-wrap: wrap; gap: 16px; }
+  #cityName { font-size: 1.2em; font-weight: bold; }
+  #score, #highscore, #timer, #round { font-weight: bold; }
+  button, select {
+    padding: 12px 16px; font-size: 1em; border-radius: 6px; cursor: pointer;
+  }
+  button { background: #007bff; color: white; border: none; }
+  button:disabled { background: #999; cursor: not-allowed; }
+  button:hover:not(:disabled) { background: #0056b3; }
+  #popup {
+    position: absolute; padding: 10px 14px; border-radius: 6px; font-weight: bold;
+    display: none; z-index: 1000; pointer-events: none;
+  }
+  .popup-dark {
+    background: rgba(0,0,0,0.85); color: #fff;
+    border: 2px solid #f00;
+  }
+  .popup-light {
+    background: rgba(255,255,255,0.9); color: #000;
+    border: 2px solid #f00;
+  }
+  @media (min-width: 600px) {
     #info {
-      padding: 16px;
-      background: #f8f8f8;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      align-items: flex-start;
+      flex-direction: row; justify-content: space-between; align-items: center;
     }
-    #info > div {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 16px;
-    }
-    #cityName {
-      font-size: 1.2em;
-      font-weight: bold;
-    }
-    #score, #highscore, #timer, #round {
-      font-weight: bold;
-    }
-    button, select {
-      padding: 12px 16px;
-      font-size: 1em;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    button {
-      background: #007bff;
-      color: white;
-      border: none;
-    }
-    button:hover {
-      background: #0056b3;
-    }
-    #popup {
-      position: absolute;
-      display: none;
-      z-index: 1000;
-      max-width: 300px;
-      font-weight: bold;
-      padding: 12px;
-      border-radius: 8px;
-      pointer-events: none;
-      /* Position via JS */
-    }
-    .dark #popup {
-      background: rgba(0, 0, 0, 0.85);
-      color: #fff;
-    }
-    #summaryOverlay {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.7);
-      display: none;
-      justify-content: center;
-      align-items: center;
-      z-index: 2000;
-    }
-    #summaryContent {
-      background: white;
-      padding: 30px 40px;
-      border-radius: 10px;
-      max-width: 400px;
-      text-align: center;
-      font-size: 1.3em;
-      font-weight: bold;
-      color: #222;
-      cursor: default;
-    }
-    @media (min-width: 600px) {
-      #info {
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-      }
-    }
-    .crosshair-icon {
-      pointer-events: none;
-    }
-  </style>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css" />
-  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+  }
+  /* Fadenkreuz am Ziel */
+  .crosshair {
+    width: 32px; height: 32px; border: 3px solid red; border-radius: 50%;
+    background: transparent;
+    position: absolute;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 900;
+  }
+</style>
+<link
+  rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"
+/>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
 </head>
 <body>
-  <div id="info">
-    <div id="cityName">Klicke auf die Karte, um die Stadt oder Sehenswürdigkeit zu lokalisieren!</div>
-    <div>
-      <span id="round">Frage: 1 / 10</span>
-      <span id="score">Punkte: 0</span>
-      <span id="highscore">Highscore: 0</span>
-      <span id="timer">Zeit: 15</span>
-    </div>
-    <div>
-      <button id="nextBtn" onclick="nextRound()" disabled>Nächstes Ziel</button>
-      <select id="styleSelector" onchange="changeMapStyle()">
-        <option value="dark">Dunkel</option>
-        <option value="osm" selected>Standard</option>
-        <option value="gray">Grau</option>
-      </select>
-    </div>
+<div id="info">
+  <div id="cityName">Klicke auf die Karte, um die Stadt oder Sehenswürdigkeit zu lokalisieren!</div>
+  <div>
+    <span id="round">Frage: 1 / 10</span>
+    <span id="score">Punkte: 0</span>
+    <span id="highscore">Highscore: 0</span>
+    <span id="timer">Zeit: 15</span>
   </div>
-  <div id="popup"></div>
-  <div id="map"></div>
-
-  <div id="summaryOverlay">
-    <div id="summaryContent"></div>
+  <div>
+    <button id="nextBtn" onclick="nextRound()" disabled>Nächstes Ziel</button>
+    <select id="styleSelector" onchange="changeMapStyle()">
+      <option value="noLabelsLight">Hell (ohne Beschriftung)</option>
+      <option value="noLabelsDark">Dunkel (ohne Beschriftung)</option>
+      <option value="streets">Standard (mit Beschriftung)</option>
+    </select>
   </div>
+</div>
+<div id="popup"></div>
+<div id="map"></div>
 
-  <script>
-    const locations = [
-      { name: "Aachen", lat: 50.7753, lon: 6.0839 },
-      { name: "Brandenburger Tor", lat: 52.5163, lon: 13.3777 },
-      { name: "Schloss Neuschwanstein", lat: 47.5576, lon: 10.7498 },
-      { name: "Kölner Dom", lat: 50.9413, lon: 6.9583 },
-      { name: "Paris", lat: 48.8566, lon: 2.3522 },
-      { name: "Wien", lat: 48.2082, lon: 16.3738 },
-      { name: "Prag", lat: 50.0755, lon: 14.4378 },
-      { name: "Bern", lat: 46.9481, lon: 7.4474 },
-      { name: "Hamburg", lat: 53.5511, lon: 9.9937 },
-      { name: "Dresden", lat: 51.0504, lon: 13.7373 }
-    ];
+<script>
+  // Trage hier deinen kostenlosen MapTiler API-Schlüssel ein:
+  const MAPTILER_API_KEY = "Ata7fzCIWNX2Y9WUthnN";
 
-    let map = L.map('map').setView([51.1657, 10.4515], 6);
+  // Karte initialisieren
+  let map = L.map('map').setView([51.1657, 10.4515], 6);
 
-    // Vorletzte Version der Karten-URLs (ohne {r})
-    const baseLayers = {
-      dark: 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png',
-      osm: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      gray: 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}.png'
-    };
-
-    let baseLayer = L.tileLayer(baseLayers.osm, {
-      attribution: '© OpenStreetMap contributors',
+  // Layer Definitionen mit MapTiler Tiles (ohne Beschriftung)
+  const tileLayers = {
+    noLabelsLight: L.tileLayer(
+      `https://api.maptiler.com/maps/basic-v2/256/{z}/{x}/{y}.png?key=${MAPTILER_API_KEY}`, {
+      attribution: '&copy; <a href="https://www.maptiler.com/copyright/" target="_blank">MapTiler</a> &copy; OpenStreetMap contributors',
       maxZoom: 18
-    }).addTo(map);
+    }),
+    noLabelsDark: L.tileLayer(
+      `https://api.maptiler.com/maps/hybrid-v3/256/{z}/{x}/{y}.png?key=${MAPTILER_API_KEY}`, {
+      attribution: '&copy; <a href="https://www.maptiler.com/copyright/" target="_blank">MapTiler</a> &copy; OpenStreetMap contributors',
+      maxZoom: 18
+    }),
+    streets: L.tileLayer(
+      `https://api.maptiler.com/maps/streets-v2/256/{z}/{x}/{y}.png?key=${MAPTILER_API_KEY}`, {
+      attribution: '&copy; <a href="https://www.maptiler.com/copyright/" target="_blank">MapTiler</a> &copy; OpenStreetMap contributors',
+      maxZoom: 18
+    })
+  };
 
-    let target, score = 0, round = 0, highscore = 0;
-    let currentLine = null;
-    let targetMarker = null;
-    let summaryTimeout;
+  // Standard-Layer auf hellem no-label Style setzen
+  let baseLayer = tileLayers.noLabelsLight.addTo(map);
+  document.body.className = 'noLabelsLight';
 
-    function nextRound() {
-      if (summaryTimeout) {
-        clearTimeout(summaryTimeout);
-        summaryTimeout = null;
-      }
-      if (currentLine) {
-        map.removeLayer(currentLine);
-        currentLine = null;
-      }
-      if (targetMarker) {
-        map.removeLayer(targetMarker);
-        targetMarker = null;
-      }
+  // Spielvariablen
+  const locations = [
+    { name: "Aachen", lat: 50.7753, lon: 6.0839 },
+    { name: "Brandenburger Tor", lat: 52.5163, lon: 13.3777 },
+    { name: "Schloss Neuschwanstein", lat: 47.5576, lon: 10.7498 },
+    { name: "Kölner Dom", lat: 50.9413, lon: 6.9583 },
+    { name: "Hamburg", lat: 53.5511, lon: 9.9937 },
+    { name: "Dresden", lat: 51.0504, lon: 13.7373 },
+    // ... hier kannst du weitere Städte / Sehenswürdigkeiten ergänzen
+  ];
 
-      if (round >= 10) {
-        showSummary();
-        return;
-      }
+  let target, score = 0, round = 0, highscore = 0;
+  let currentLine = null;
+  let crosshairMarker = null;
+  let roundStartTime = 0;
 
-      round++;
-      document.getElementById('round').innerText = `Frage: ${round} / 10`;
-      document.getElementById('score').innerText = `Punkte: ${score}`;
-      target = locations[Math.floor(Math.random() * locations.length)];
-      document.getElementById('cityName').innerText = `Wo liegt: ${target.name}?`;
-      document.getElementById('nextBtn').disabled = true;
+  const popup = document.getElementById('popup');
+  const nextBtn = document.getElementById('nextBtn');
+  const cityNameEl = document.getElementById('cityName');
+  const roundEl = document.getElementById('round');
+  const scoreEl = document.getElementById('score');
+  const highscoreEl = document.getElementById('highscore');
+  const timerEl = document.getElementById('timer');
+  const styleSelector = document.getElementById('styleSelector');
+
+  // Punkte nach Entfernung berechnen
+  function calculatePoints(distanceKm) {
+    if (distanceKm <= 10) return 100;
+    let deduction = Math.floor(distanceKm / 100) * 10;
+    let points = 100 - deduction;
+    return points < 0 ? 0 : points;
+  }
+
+  function showPopup(message, latlng) {
+    if (!latlng) return;
+    popup.innerText = message;
+    popup.style.display = 'block';
+
+    const point = map.latLngToContainerPoint(latlng);
+    // Versatz rechts oben entlang der Linie
+    popup.style.left = (point.x + 10) + 'px';
+    popup.style.top = (point.y - 40) + 'px';
+
+    // Popup style je nach Karte
+    if (styleSelector.value === 'noLabelsDark') {
+      popup.className = 'popup-dark';
+    } else {
+      popup.className = 'popup-light';
     }
 
-    function showPopup(message, clickLatLng, targetLatLng) {
-      const popup = document.getElementById('popup');
-      popup.innerText = message;
-      popup.style.display = 'block';
+    setTimeout(() => {
+      popup.style.display = 'none';
+    }, 5000);
+  }
 
-      const midLat = (clickLatLng.lat + targetLatLng.lat) / 2;
-      const midLng = (clickLatLng.lng + targetLatLng.lng) / 2;
-      const point = map.latLngToContainerPoint([midLat, midLng]);
-      popup.style.left = `${point.x + 20}px`;
-      popup.style.top = `${point.y - 40}px`;
+  // Linien und Marker entfernen
+  function clearCurrentMarkers() {
+    if (currentLine) {
+      map.removeLayer(currentLine);
+      currentLine = null;
+    }
+    if (crosshairMarker) {
+      map.removeLayer(crosshairMarker);
+      crosshairMarker = null;
+    }
+    popup.style.display = 'none';
+  }
 
-      if(document.body.classList.contains('dark')) {
-        popup.style.background = 'rgba(0,0,0,0.85)';
-        popup.style.color = '#fff';
-      } else if(document.body.classList.contains('gray')) {
-        popup.style.background = 'rgba(230,230,230,0.9)';
-        popup.style.color = '#000';
-      } else {
-        popup.style.background = 'rgba(255,255,255,0.9)';
-        popup.style.color = '#000';
-      }
+  // Fadenkreuz am Ziel als roten Kreis (Leaflet circle marker mit Stil)
+  function addCrosshairMarker(latlng) {
+    // Marker mit SVG-Circle und rotem Rand
+    if (crosshairMarker) map.removeLayer(crosshairMarker);
+    crosshairMarker = L.circleMarker(latlng, {
+      radius: 15,
+      color: 'red',
+      weight: 3,
+      fillOpacity: 0,
+      interactive: false,
+      pane: 'markerPane'
+    }).addTo(map);
+  }
+
+  // Spiel starten oder nächste Runde
+  function nextRound() {
+    clearCurrentMarkers();
+    if (round >= 10) {
+      // Spiel vorbei: Zusammenfassung nach 5 Sekunden
+      cityNameEl.innerText = "Spiel vorbei! Zusammenfassung wird angezeigt...";
+      nextBtn.disabled = true;
+      roundStartTime = 0;
 
       setTimeout(() => {
-        popup.style.display = 'none';
-      }, 5000);
-    }
-
-    map.on('click', function(e) {
-      if (!target) return;
-
-      if (currentLine) {
-        map.removeLayer(currentLine);
-        currentLine = null;
-      }
-      if (targetMarker) {
-        map.removeLayer(targetMarker);
-        targetMarker = null;
-      }
-
-      const clickedLatLng = e.latlng;
-      const targetLatLng = L.latLng(target.lat, target.lon);
-
-      const distance = map.distance(clickedLatLng, targetLatLng) / 1000;
-
-      let points = Math.max(0, Math.round((10 - distance) * 10));
-      if(points > 100) points = 100;
-
-      score += points;
-      document.getElementById('score').innerText = `Punkte: ${score}`;
-
-      currentLine = L.polyline([clickedLatLng, targetLatLng], {
-        color: '#FF5733',
-        weight: 4,
-        opacity: 0.9,
-      }).addTo(map);
-
-      const crossIcon = L.divIcon({
-        className: 'crosshair-icon',
-        iconSize: [20, 20],
-        html: `
-          <svg width="20" height="20" viewBox="0 0 20 20">
-            <line x1="10" y1="0" x2="10" y2="20" stroke="red" stroke-width="2"/>
-            <line x1="0" y1="10" x2="20" y2="10" stroke="red" stroke-width="2"/>
-          </svg>`
-      });
-      targetMarker = L.marker(targetLatLng, { icon: crossIcon }).addTo(map);
-
-      showPopup(`${target.name} war ${distance.toFixed(1)} km entfernt. Punkte: ${points}`, clickedLatLng, targetLatLng);
-
-      target = null;
-      document.getElementById('nextBtn').disabled = false;
-
-      // Wenn das 10. Ergebnis war, zeige Zusammenfassung in 5 Sekunden automatisch
-      if(round >= 10) {
-        summaryTimeout = setTimeout(showSummary, 5000);
-      }
-    });
-
-    function changeMapStyle() {
-      const style = document.getElementById('styleSelector').value;
-      if (map.hasLayer(baseLayer)) {
-        map.removeLayer(baseLayer);
-      }
-
-      if (style === 'dark') {
-        baseLayer = L.tileLayer(baseLayers.dark, {
-          attribution: '© Stadia Maps',
-          maxZoom: 18
-        });
-        document.body.classList.add('dark');
-        document.body.classList.remove('gray');
-      } else if (style === 'gray') {
-        baseLayer = L.tileLayer(baseLayers.gray, {
-          attribution: '© Stadia Maps',
-          maxZoom: 18
-        });
-        document.body.classList.add('gray');
-        document.body.classList.remove('dark');
-      } else {
-        baseLayer = L.tileLayer(baseLayers.osm, {
-          attribution: '© OpenStreetMap contributors',
-          maxZoom: 18
-        });
-        document.body.classList.remove('dark');
-        document.body.classList.remove('gray');
-      }
-      baseLayer.addTo(map);
-    }
-
-    function showSummary() {
-      if(score > highscore) highscore = score;
-      document.getElementById('highscore').innerText = "Highscore: " + highscore;
-      const overlay = document.getElementById('summaryOverlay');
-      const content = document.getElementById('summaryContent');
-      content.innerHTML = `Spiel vorbei!<br>Deine Punkte: ${score}<br>Highscore: ${highscore}<br><br>Klicke hier, um neu zu starten.`;
-      overlay.style.display = 'flex';
-
-      // Klick auf Overlay startet neu
-      overlay.onclick = () => {
-        overlay.style.display = 'none';
+        const totalTimeSeconds = Math.round((performance.now() - gameStartTime) / 1000);
+        alert(`Spiel beendet!\nHighscore: ${highscore}\nBenötigte Gesamtzeit: ${totalTimeSeconds} Sekunden`);
+        // Reset Spiel
         score = 0;
         round = 0;
-        document.getElementById('score').innerText = `Punkte: ${score}`;
-        nextRound();
-      };
+        scoreEl.innerText = `Punkte: ${score}`;
+        roundEl.innerText = `Frage: 0 / 10`;
+        cityNameEl.innerText = "Klicke auf die Karte, um die Stadt oder Sehenswürdigkeit zu lokalisieren!";
+      }, 5000);
+      return;
     }
 
-    nextRound();
-  </script>
+    round++;
+    roundEl.innerText = `Frage: ${round} / 10`;
+    scoreEl.innerText = `Punkte: ${score}`;
+    target = locations[Math.floor(Math.random() * locations.length)];
+    cityNameEl.innerText = `Wo liegt: ${target.name}?`;
+    nextBtn.disabled = true;
+    roundStartTime = performance.now();
+
+    if (round === 1) {
+      gameStartTime = performance.now();
+    }
+  }
+
+  // Kartenstil wechseln
+  function changeMapStyle() {
+    if (baseLayer) map.removeLayer(baseLayer);
+    baseLayer = tileLayers[styleSelector.value];
+    baseLayer.addTo(map);
+  }
+
+  // Klick auf Karte, um zu raten
+  map.on('click', function(e) {
+    if (!target) return;
+
+    clearCurrentMarkers();
+
+    const userLatLng = e.latlng;
+    const targetLatLng = L.latLng(target.lat, target.lon);
+    const distance = map.distance(userLatLng, targetLatLng) / 1000; // in km
+    const points = calculatePoints(distance);
+    score += points;
+    scoreEl.innerText = `Punkte: ${score}`;
+
+    // Linie mit Pfeil (einfaches Polyline + Marker am Ziel als Fadenkreuz)
+    currentLine = L.polyline([userLatLng, targetLatLng], {
+      color: 'red',
+      weight: 4,
+      opacity: 0.8,
+      dashArray: '10,5',
+      // Kein eingebauter Pfeil, stattdessen Fadenkreuz am Ziel
+    }).addTo(map);
+
+    addCrosshairMarker(targetLatLng);
+
+    showPopup(`${target.name} war ${distance.toFixed(1)} km entfernt. Punkte: ${points}`, userLatLng);
+
+    target = null;
+    nextBtn.disabled = false;
+  });
+
+  nextBtn.disabled = true;
+  nextRound();
+
+</script>
 </body>
 </html>

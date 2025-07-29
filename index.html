@@ -1,324 +1,533 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Städte-Ratespiel Deutschland</title>
-<style>
-  html, body {
-    margin: 0; padding: 0; height: 100%; font-family: Arial, sans-serif; font-size: 1.1em;
-  }
-  #map {
-    height: 75vh; width: 100%;
-  }
-  #info {
-    padding: 12px 16px;
-    background: #f8f8f8;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-  }
-  #cityName {
-    font-weight: bold;
-    font-size: 1.3em;
-    flex-grow: 1;
-  }
-  span {
-    font-weight: bold;
-    margin-left: 10px;
-  }
-  button {
-    background: #007bff;
-    border: none;
-    color: white;
-    padding: 10px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 1em;
-  }
-  button:hover {
-    background: #0056b3;
-  }
-  #popup {
-    position: absolute;
-    pointer-events: none;
-    background: rgba(255,255,255,0.9);
-    border-radius: 6px;
-    padding: 8px 12px;
-    font-weight: bold;
-    display: none;
-    z-index: 1000;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-  }
-  #summaryPopup {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    padding: 24px 32px;
-    font-size: 1.3em;
-    font-weight: bold;
-    border-radius: 10px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
-    display: none;
-    z-index: 2000;
-    text-align: center;
-  }
-  /* Rotes rundes Fadenkreuz */
-  .crosshair {
-    width: 30px;
-    height: 30px;
-    border: 3px solid red;
-    border-radius: 50%;
-    background: transparent;
-    box-sizing: border-box;
-  }
-</style>
-<link
-  rel="stylesheet"
-  href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"
-/>
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Städte-Ratespiel Deutschland</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%; font-family: Arial, sans-serif; font-size: 1.1em;
+    }
+    #map {
+      width: 100%; height: 75vh; position: relative;
+    }
+    #info {
+      padding: 16px;
+      background: #f8f8f8;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    #info > div {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    #cityName {
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+    #score, #highscore, #timer, #round {
+      font-weight: bold;
+    }
+    button, select {
+      padding: 12px 16px;
+      font-size: 1em;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+    }
+    button:hover:not(:disabled) {
+      background: #0056b3;
+    }
+    button:disabled {
+      background: #999;
+      cursor: default;
+    }
+    #popup {
+      position: absolute;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-weight: bold;
+      display: none;
+      z-index: 1000;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .dark #popup, .cartoDarkNoLabels #popup {
+      background: rgba(30,30,30,0.9);
+      color: #fff;
+    }
+    #summaryPopup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #222;
+      color: white;
+      padding: 20px 30px;
+      border-radius: 10px;
+      font-size: 1.3em;
+      display: none;
+      z-index: 2000;
+      text-align: center;
+      max-width: 90vw;
+      box-shadow: 0 0 15px #000;
+    }
+    @media (min-width: 600px) {
+      #info {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
 </head>
-<body>
+<body class="cartoDarkNoLabels">
   <div id="info">
     <div id="cityName">Klicke auf die Karte, um die Stadt oder Sehenswürdigkeit zu lokalisieren!</div>
     <div>
-      <span id="round">Frage: 0 / 10</span>
+      <span id="round">Frage: 1 / 10</span>
       <span id="score">Punkte: 0</span>
       <span id="highscore">Highscore: 0</span>
-      <button id="nextBtn" disabled>Nächstes Ziel</button>
-      <button id="newGameBtn">Neues Spiel</button>
+      <span id="timer">Zeit: 15</span>
+    </div>
+    <div>
+      <button id="nextBtn" onclick="nextRound()" disabled>Nächstes Ziel</button>
+      <button id="newGameBtn" onclick="startNewGame()">Neues Spiel</button>
+      <select id="styleSelector" onchange="changeMapStyle()">
+        <option value="osm">Light</option>
+        <option value="gray">Grau</option>
+        <option value="dark">Dark (MapTiler)</option>
+        <option value="cartoDarkNoLabels" selected>Dark (Carto no labels)</option>
+      </select>
     </div>
   </div>
+
+  <div id="map"></div>
   <div id="popup"></div>
   <div id="summaryPopup"></div>
-  <div id="map"></div>
 
 <script>
-  const MAPTILER_API_KEY = "Ata7fzCIWNX2Y9WUthnN";
+  const API_KEY = 'Ata7fzCIWNX2Y9WUthnN';
 
   const locations = [
     { name: "Berlin", lat: 52.5200, lon: 13.4050 },
     { name: "Hamburg", lat: 53.5511, lon: 9.9937 },
     { name: "München", lat: 48.1351, lon: 11.5820 },
-    { name: "Kölner Dom", lat: 50.9413, lon: 6.9583 },
+    { name: "Köln", lat: 50.9375, lon: 6.9603 },
     { name: "Frankfurt am Main", lat: 50.1109, lon: 8.6821 },
-    { name: "Dresden", lat: 51.0504, lon: 13.7373 },
-    { name: "Schloss Neuschwanstein", lat: 47.5576, lon: 10.7498 },
-    { name: "Brandenburger Tor", lat: 52.5163, lon: 13.3777 },
-    { name: "Heidelberg", lat: 49.3988, lon: 8.6724 },
+    { name: "Stuttgart", lat: 48.7758, lon: 9.1829 },
+    { name: "Düsseldorf", lat: 51.2277, lon: 6.7735 },
+    { name: "Dortmund", lat: 51.5136, lon: 7.4653 },
+    { name: "Essen", lat: 51.4556, lon: 7.0116 },
     { name: "Leipzig", lat: 51.3397, lon: 12.3731 },
+    { name: "Bremen", lat: 53.0793, lon: 8.8017 },
+    { name: "Dresden", lat: 51.0504, lon: 13.7373 },
+    { name: "Hannover", lat: 52.3759, lon: 9.7320 },
+    { name: "Nürnberg", lat: 49.4521, lon: 11.0767 },
+    { name: "Duisburg", lat: 51.4344, lon: 6.7623 },
+    { name: "Bochum", lat: 51.4818, lon: 7.2162 },
+    { name: "Wuppertal", lat: 51.2562, lon: 7.1508 },
+    { name: "Bielefeld", lat: 52.0302, lon: 8.5325 },
+    { name: "Bonn", lat: 50.7374, lon: 7.0982 },
+    { name: "Münster", lat: 51.9607, lon: 7.6261 },
+    { name: "Karlsruhe", lat: 49.0069, lon: 8.4037 },
+    { name: "Mannheim", lat: 49.4875, lon: 8.4660 },
+    { name: "Augsburg", lat: 48.3705, lon: 10.8978 },
+    { name: "Wiesbaden", lat: 50.0820, lon: 8.2410 },
+    { name: "Gelsenkirchen", lat: 51.5177, lon: 7.0857 },
+    { name: "Mönchengladbach", lat: 51.1805, lon: 6.4428 },
+    { name: "Braunschweig", lat: 52.2689, lon: 10.5268 },
+    { name: "Chemnitz", lat: 50.8278, lon: 12.9214 },
+    { name: "Kiel", lat: 54.3233, lon: 10.1228 },
+    { name: "Aachen", lat: 50.7753, lon: 6.0839 },
+    { name: "Halle (Saale)", lat: 51.4966, lon: 11.9689 },
+    { name: "Magdeburg", lat: 52.1205, lon: 11.6276 },
+    { name: "Freiburg im Breisgau", lat: 47.9990, lon: 7.8421 },
+    { name: "Krefeld", lat: 51.3388, lon: 6.5853 },
+    { name: "Lübeck", lat: 53.8655, lon: 10.6866 },
+    { name: "Oberhausen", lat: 51.4962, lon: 6.8638 },
+    { name: "Erfurt", lat: 50.9848, lon: 11.0299 },
+    { name: "Mainz", lat: 49.9929, lon: 8.2473 },
+    { name: "Rostock", lat: 54.0924, lon: 12.0991 },
+    { name: "Kassel", lat: 51.3127, lon: 9.4797 },
+    { name: "Hagen", lat: 51.3671, lon: 7.4633 },
+    { name: "Saarbrücken", lat: 49.2402, lon: 6.9969 },
+    { name: "Hamm", lat: 51.6794, lon: 7.8152 },
+    { name: "Potsdam", lat: 52.3906, lon: 13.0645 },
+    { name: "Ludwigshafen am Rhein", lat: 49.4816, lon: 8.4462 },
+    { name: "Oldenburg", lat: 53.1435, lon: 8.2146 },
+    { name: "Leverkusen", lat: 51.0459, lon: 6.9846 },
+    { name: "Osnabrück", lat: 52.2799, lon: 8.0472 },
+    { name: "Solingen", lat: 51.1731, lon: 7.0735 },
+    { name: "Heidelberg", lat: 49.3988, lon: 8.6724 },
+    { name: "Herne", lat: 51.5360, lon: 7.2153 },
+    { name: "Neuss", lat: 51.2046, lon: 6.6879 },
+    { name: "Darmstadt", lat: 49.8728, lon: 8.6512 },
+    { name: "Paderborn", lat: 51.7189, lon: 8.7575 },
+    { name: "Regensburg", lat: 49.0139, lon: 12.1016 },
+    { name: "Ingolstadt", lat: 48.7653, lon: 11.4237 },
+    { name: "Würzburg", lat: 49.7913, lon: 9.9534 },
+    { name: "Fürth", lat: 49.4770, lon: 10.9880 },
+    { name: "Wolfsburg", lat: 52.4226, lon: 10.7865 },
+    { name: "Offenbach am Main", lat: 50.0992, lon: 8.7662 },
+    { name: "Ulm", lat: 48.4011, lon: 9.9876 },
+    { name: "Heilbronn", lat: 49.1427, lon: 9.2100 },
+    { name: "Pforzheim", lat: 48.8925, lon: 8.6944 },
+    { name: "Göttingen", lat: 51.5413, lon: 9.9158 },
+    { name: "Bottrop", lat: 51.5236, lon: 6.9286 },
+    { name: "Trier", lat: 49.7531, lon: 6.6431 },
+    { name: "Recklinghausen", lat: 51.6153, lon: 7.1976 },
+    { name: "Reutlingen", lat: 48.4911, lon: 9.2044 },
+    { name: "Bremerhaven", lat: 53.5396, lon: 8.5809 },
+    { name: "Koblenz", lat: 50.3569, lon: 7.5886 },
+    { name: "Bergisch Gladbach", lat: 50.9979, lon: 7.1363 },
+    { name: "Jena", lat: 50.9271, lon: 11.5892 },
+    { name: "Remscheid", lat: 51.1789, lon: 7.1926 },
+    { name: "Erlangen", lat: 49.5944, lon: 11.0076 },
+    { name: "Moers", lat: 51.4545, lon: 6.6326 },
+    { name: "Siegen", lat: 50.8748, lon: 8.0226 },
+    { name: "Hildesheim", lat: 52.1500, lon: 9.9517 },
+    { name: "Salzgitter", lat: 52.1500, lon: 10.3500 },
+    { name: "Cottbus", lat: 51.7577, lon: 14.3289 },
+    { name: "Kaiserslautern", lat: 49.4448, lon: 7.7687 },
+    { name: "Gütersloh", lat: 51.9081, lon: 8.3785 },
+    { name: "Witten", lat: 51.4370, lon: 7.3408 },
+    { name: "Hanau", lat: 50.1313, lon: 8.9192 },
+    { name: "Lüneburg", lat: 53.2465, lon: 10.4115 },
+    { name: "Villingen-Schwenningen", lat: 48.0685, lon: 8.4804 },
+    { name: "Esslingen am Neckar", lat: 48.7395, lon: 9.3113 },
+    { name: "Konstanz", lat: 47.6779, lon: 9.1730 },
+    { name: "Neumünster", lat: 54.0740, lon: 9.9834 },
+    { name: "Düren", lat: 50.8033, lon: 6.4847 },
+    { name: "Rosenheim", lat: 47.8565, lon: 12.1223 },
+    { name: "Zwickau", lat: 50.7213, lon: 12.4915 },
+    { name: "Velbert", lat: 51.3414, lon: 7.0463 },
+    { name: "Bamberg", lat: 49.8988, lon: 10.9028 },
+    { name: "Dinslaken", lat: 51.5614, lon: 6.7417 },
+    { name: "Flensburg", lat: 54.7934, lon: 9.4469 },
+    { name: "Ludwigsburg", lat: 48.8964, lon: 9.1916 },
+    { name: "Hagen", lat: 51.3671, lon: 7.4633 },
+    { name: "Tübingen", lat: 48.5216, lon: 9.0579 },
+    { name: "Kempten", lat: 47.7260, lon: 10.3139 },
+    { name: "Ratingen", lat: 51.3122, lon: 6.8507 },
+    { name: "Marburg", lat: 50.8076, lon: 8.7700 },
+    { name: "Neubrandenburg", lat: 53.5573, lon: 13.2612 },
+    { name: "Gera", lat: 50.8778, lon: 12.0764 },
+    { name: "Sindelfingen", lat: 48.7015, lon: 9.0095 },
+    { name: "Weimar", lat: 50.9803, lon: 11.3290 },
+    { name: "Dessau-Roßlau", lat: 51.8384, lon: 12.2412 },
+    { name: "Lünen", lat: 51.6132, lon: 7.4843 },
+    { name: "Greifswald", lat: 54.0936, lon: 13.3783 },
+    { name: "Brandenburger Tor", lat: 52.5163, lon: 13.3777 },
+  { name: "Schloss Neuschwanstein", lat: 47.5576, lon: 10.7498 },
+  { name: "Kölner Dom", lat: 50.9413, lon: 6.9583 },
+  { name: "Heidelberger Schloss", lat: 49.4106, lon: 8.7158 },
+  { name: "Reichstagsgebäude", lat: 52.5186, lon: 13.3762 },
+  { name: "Fernsehturm Berlin", lat: 52.5208, lon: 13.4094 },
+  { name: "Zugspitze", lat: 47.4210, lon: 10.9844 },
+  { name: "Römer Frankfurt", lat: 50.1109, lon: 8.6797 },
+  { name: "Marienplatz München", lat: 48.1371, lon: 11.5753 },
+  { name: "Sanssouci Potsdam", lat: 52.3995, lon: 13.0550 },
+  { name: "Loreley", lat: 50.1317, lon: 7.7036 },
+  { name: "Schloss Charlottenburg", lat: 52.5207, lon: 13.2956 },
+  { name: "Bauhaus Dessau", lat: 51.8357, lon: 12.2435 },
+  { name: "Königssee", lat: 47.5937, lon: 12.9916 },
+  { name: "Europa-Park", lat: 48.2680, lon: 7.7214 },
+  { name: "Völkerschlachtdenkmal Leipzig", lat: 51.3190, lon: 12.4230 },
+  { name: "Walhalla", lat: 48.9496, lon: 11.7567 },
+  { name: "Schloss Herrenchiemsee", lat: 47.8750, lon: 12.4350 },
+  { name: "Miniatur Wunderland Hamburg", lat: 53.5436, lon: 9.9853 },
+  { name: "Dom zu Speyer", lat: 49.3165, lon: 8.4387 },
+  { name: "Elbphilharmonie Hamburg", lat: 53.5413, lon: 9.9840 },
+  { name: "Berliner Dom", lat: 52.5192, lon: 13.4010 },
+  { name: "Schloss Schwerin", lat: 53.6304, lon: 11.4142 },
+  { name: "Sanssouci Park", lat: 52.3998, lon: 13.0516 },
+  { name: "Heidelberg Altstadt", lat: 49.4094, lon: 8.7093 },
+  { name: "Rathaus Freiburg", lat: 47.9978, lon: 7.8490 },
+  { name: "Kölner Rheinauhafen", lat: 50.9270, lon: 6.9635 },
+  { name: "Zeche Zollverein Essen", lat: 51.4850, lon: 7.0154 },
+  { name: "Museum Island Berlin", lat: 52.5169, lon: 13.4015 },
+  { name: "Olympiastadion Berlin", lat: 52.5145, lon: 13.2394 },
+  { name: "St. Michaelis Hamburg", lat: 53.5503, lon: 9.9842 },
+  { name: "Frauenkirche Dresden", lat: 51.0511, lon: 13.7412 },
+  { name: "Linderhof Palace", lat: 47.6354, lon: 11.0869 },
+  { name: "Holstentor Lübeck", lat: 53.8686, lon: 10.6863 },
+  { name: "Sanssouci Palace", lat: 52.3996, lon: 13.0549 },
+  { name: "Dresden Zwinger", lat: 51.0524, lon: 13.7370 },
+  { name: "Rothenburg ob der Tauber", lat: 49.3752, lon: 10.1794 },
+  { name: "Wartburg Eisenach", lat: 50.9837, lon: 10.3527 },
+  { name: "Bauhaus Museum Weimar", lat: 50.9816, lon: 11.3272 },
+  { name: "Neues Rathaus Hannover", lat: 52.3741, lon: 9.7399 },
+  { name: "Holocaust-Mahnmal Berlin", lat: 52.5134, lon: 13.3785 },
+  { name: "Kulturpalast Dresden", lat: 51.0520, lon: 13.7381 },
+  { name: "Rathaus Leipzig", lat: 51.3397, lon: 12.3731 },
+  { name: "Hohenzollern Castle", lat: 48.2958, lon: 8.9997 },
+  { name: "Aachener Dom", lat: 50.7760, lon: 6.0836 },
+  { name: "Hamburg Speicherstadt", lat: 53.5433, lon: 9.9844 },
+  { name: "Schloss Drachenburg", lat: 50.6707, lon: 7.2012 },
+  { name: "Europa-Center Berlin", lat: 52.5075, lon: 13.3357 },
+  { name: "Schloss Moritzburg", lat: 51.1231, lon: 13.6627 },
+  { name: "Burg Hohenzollern", lat: 48.2978, lon: 8.9992 },
+  { name: "Dresden Frauenkirche", lat: 51.0511, lon: 13.7412 },
+  { name: "Heidelberg University", lat: 49.4144, lon: 8.6723 },
+  { name: "St. Paulus Dom Münster", lat: 51.9607, lon: 7.6277 },
+  { name: "Technikmuseum Berlin", lat: 52.5011, lon: 13.3750 },
+  { name: "Berliner Philharmonie", lat: 52.5067, lon: 13.3693 },
+  { name: "München Residenz", lat: 48.1411, lon: 11.5761 },
+  { name: "Schloss Schwerin", lat: 53.6303, lon: 11.4138 },
+  { name: "Burg Eltz", lat: 50.2313, lon: 7.2709 },
+  { name: "Lüneburger Heide", lat: 53.1667, lon: 10.4333 },
+  { name: "Kölner Seilbahn", lat: 50.9490, lon: 6.9644 },
+  { name: "Freiburg Münster", lat: 47.9953, lon: 7.8516 },
+  { name: "Museum Ludwig Köln", lat: 50.9375, lon: 6.9603 },
+  { name: "Duisburg Innenhafen", lat: 51.4341, lon: 6.7667 },
+  { name: "Völkerschlachtdenkmal", lat: 51.3151, lon: 12.4251 },
+  { name: "Mauerpark Berlin", lat: 52.5486, lon: 13.4043 },
+  { name: "Dom zu Speyer", lat: 49.3165, lon: 8.4387 },
+  { name: "Museum für Naturkunde Berlin", lat: 52.5259, lon: 13.3690 },
+  { name: "Trier Porta Nigra", lat: 49.7586, lon: 6.6457 },
+  { name: "Altes Rathaus Bamberg", lat: 49.8950, lon: 10.9011 },
+  { name: "Kasseler Documenta-Halle", lat: 51.3127, lon: 9.4797 },
+  { name: "Museum Folkwang Essen", lat: 51.4510, lon: 7.0080 },
+  { name: "Münchner Freiheit", lat: 48.1550, lon: 11.5815 },
+  { name: "Maximilianeum München", lat: 48.1442, lon: 11.5836 },
+  { name: "Bamberger Dom", lat: 49.8916, lon: 10.9036 },
+  { name: "Kunsthalle Hamburg", lat: 53.5576, lon: 9.9813 },
+  { name: "Neue Pinakothek München", lat: 48.1444, lon: 11.5647 },
+  { name: "Altes Schloss Stuttgart", lat: 48.7770, lon: 9.1820 },
+  { name: "Schloss Schwetzingen", lat: 49.3139, lon: 8.5467 },
+  { name: "Alte Oper Frankfurt", lat: 50.1133, lon: 8.6766 },
+  { name: "Zoologischer Garten Berlin", lat: 52.5081, lon: 13.3374 },
+  { name: "Staatsoper Berlin", lat: 52.5171, lon: 13.3903 },
+  { name: "Opernhaus Düsseldorf", lat: 51.2275, lon: 6.7790 },
+  { name: "Neues Schloss Stuttgart", lat: 48.7793, lon: 9.1824 },
+  { name: "Elbauenpark Magdeburg", lat: 52.1227, lon: 11.6410 },
+  { name: "Jüdisches Museum Berlin", lat: 52.5076, lon: 13.3884 },
+  { name: "Kunsthalle Bremen", lat: 53.0736, lon: 8.8062 },
+  { name: "Lindau Insel", lat: 47.5486, lon: 9.6839 },
+  { name: "Schloss Ludwigsburg", lat: 48.8956, lon: 9.1907 },
+  { name: "Speicherstadt Hamburg", lat: 53.5443, lon: 9.9850 },
+  { name: "Luisenpark Mannheim", lat: 49.4787, lon: 8.4709 },
+  { name: "Kunstmuseum Bonn", lat: 50.7353, lon: 7.1000 },
+  { name: "Botanischer Garten Berlin", lat: 52.4498, lon: 13.3071 },
+  { name: "Festung Königstein", lat: 50.9196, lon: 13.9389 },
+  { name: "Historisches Museum Frankfurt", lat: 50.1121, lon: 8.6764 },
+  { name: "Münchner Olympiapark", lat: 48.1743, lon: 11.5535 },// ... hier erweitern
   ];
 
-  const maxRounds = 10;
-  let map = L.map("map").setView([51.1657, 10.4515], 6);
+  let map = L.map('map').setView([51.1657, 10.4515], 6);
 
-  // Nur Light Map ohne Beschriftungen von MapTiler
-  const tileLayerLight = L.tileLayer(
-    `https://api.maptiler.com/maps/basic-v2/256/{z}/{x}/{y}.png?key=${MAPTILER_API_KEY}`, {
-      attribution: '&copy; <a href="https://www.maptiler.com/">MapTiler</a> &copy; OpenStreetMap contributors',
+  const baseLayers = {
+    osm: L.tileLayer(`https://api.maptiler.com/maps/basic/256/{z}/{x}/{y}.png?key=${API_KEY}`, {
+      attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 18,
-    }
-  ).addTo(map);
+    }),
+    gray: L.tileLayer(`https://api.maptiler.com/maps/toner-lite/256/{z}/{x}/{y}.png?key=${API_KEY}`, {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 18,
+    }),
+    dark: L.tileLayer(`https://api.maptiler.com/maps/darkmatter/256/{z}/{x}/{y}.png?key=${API_KEY}`, {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 18,
+    }),
+    cartoDarkNoLabels: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
+      maxZoom: 19,
+      subdomains: 'abcd'
+    }),
+  };
 
-  // UI Elemente
-  const cityNameDiv = document.getElementById("cityName");
-  const roundSpan = document.getElementById("round");
-  const scoreSpan = document.getElementById("score");
-  const highscoreSpan = document.getElementById("highscore");
-  const nextBtn = document.getElementById("nextBtn");
-  const newGameBtn = document.getElementById("newGameBtn");
-  const popup = document.getElementById("popup");
-  const summaryPopup = document.getElementById("summaryPopup");
+  // Start mit Carto Dark No Labels
+  let baseLayer = baseLayers.cartoDarkNoLabels.addTo(map);
+  document.body.className = 'cartoDarkNoLabels';
 
-  // Variablen
-  let target = null;
   let score = 0;
   let highscore = 0;
   let round = 0;
+  let timer;
+  let timeLeft = 15;
+  let target = null;
   let currentLine = null;
-  let currentMarker = null;
-  let gameStartTime = null;
-  let summaryTimeout = null;
+  let currentArrowMarker = null;
+  let availableLocations = [];
+  let usedLocations = new Set();
 
-  // Shuffle-Funktion für keine doppelten Ziele
-  function shuffleArray(arr) {
-    const a = arr.slice();
-    for (let i = a.length -1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i+1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  }
+  const maxRounds = 10;
 
-  let shuffledLocations = [];
-  let currentIndex = 0;
+  const cityNameEl = document.getElementById('cityName');
+  const roundEl = document.getElementById('round');
+  const scoreEl = document.getElementById('score');
+  const highscoreEl = document.getElementById('highscore');
+  const timerEl = document.getElementById('timer');
+  const nextBtn = document.getElementById('nextBtn');
+  const newGameBtn = document.getElementById('newGameBtn');
+  const popup = document.getElementById('popup');
+  const summaryPopup = document.getElementById('summaryPopup');
+  const styleSelector = document.getElementById('styleSelector');
 
-  // Punkteberechnung nach Entfernung
-  // 10 km = 100 Punkte, ab 100 km jeweils -10 Punkte pro 100 km, min 0, max 100
-  function calcPoints(distanceKm) {
-    if(distanceKm <= 10) return 100;
-    let penalty = Math.floor(distanceKm / 100) * 10;
-    let points = 100 - penalty;
-    return points < 0 ? 0 : points > 100 ? 100 : points;
-  }
-
-  // Rotes rundes Fadenkreuz als DivIcon
-  const crosshairIcon = L.divIcon({
-    className: "crosshair",
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
-    popupAnchor: [0, -15]
-  });
-
-  // Neues Spiel starten
-  function newGame() {
+  function startNewGame() {
     score = 0;
     round = 0;
-    currentIndex = 0;
-    shuffledLocations = shuffleArray(locations);
-
-    cityNameDiv.textContent = "Klicke auf die Karte, um die Stadt oder Sehenswürdigkeit zu lokalisieren!";
-    scoreSpan.textContent = "Punkte: 0";
-    roundSpan.textContent = `Frage: 0 / ${maxRounds}`;
-    summaryPopup.style.display = "none";
-    popup.style.display = "none";
+    timeLeft = 15;
+    usedLocations.clear();
+    availableLocations = [...locations];
+    shuffleArray(availableLocations);
+    summaryPopup.style.display = 'none';
     nextBtn.disabled = true;
-
-    if(currentLine) {
-      map.removeLayer(currentLine);
-      currentLine = null;
-    }
-    if(currentMarker) {
-      map.removeLayer(currentMarker);
-      currentMarker = null;
-    }
-    target = null;
-    gameStartTime = null;
-
+    newGameBtn.disabled = true;
+    cityNameEl.innerText = "Klicke auf die Karte, um die Stadt oder Sehenswürdigkeit zu lokalisieren!";
+    scoreEl.innerText = `Punkte: ${score}`;
+    roundEl.innerText = `Frage: ${round} / ${maxRounds}`;
+    timerEl.innerText = `Zeit: ${timeLeft}`;
+    clearLineAndMarker();
     nextRound();
   }
 
-  // Zur nächsten Frage springen
   function nextRound() {
-    if(round >= maxRounds) {
-      return;
-    }
-    if(currentIndex >= shuffledLocations.length) {
-      alert("Keine weiteren Ziele verfügbar.");
+    clearLineAndMarker();
+    if (round >= maxRounds) {
+      // Zusammenfassung automatisch nach 4.5 Sekunden zeigen
+      setTimeout(showSummary, 4500);
+      nextBtn.disabled = true;
+      newGameBtn.disabled = false;
+      cityNameEl.innerText = "Spiel beendet! Drücke 'Neues Spiel' für eine neue Runde.";
       return;
     }
     round++;
-    roundSpan.textContent = `Frage: ${round} / ${maxRounds}`;
-    target = shuffledLocations[currentIndex];
-    currentIndex++;
-
-    cityNameDiv.textContent = `Wo befindet sich: ${target.name}?`;
+    timeLeft = 15;
+    roundEl.innerText = `Frage: ${round} / ${maxRounds}`;
+    timerEl.innerText = `Zeit: ${timeLeft}`;
+    scoreEl.innerText = `Punkte: ${score}`;
+    summaryPopup.style.display = 'none';
     nextBtn.disabled = true;
+    newGameBtn.disabled = true;
 
-    if(currentLine) {
-      map.removeLayer(currentLine);
-      currentLine = null;
-    }
-    if(currentMarker) {
-      map.removeLayer(currentMarker);
-      currentMarker = null;
-    }
+    // Ziel zufällig und ohne Wiederholung wählen
+    do {
+      target = availableLocations.pop();
+    } while (usedLocations.has(target) && availableLocations.length > 0);
 
-    popup.style.display = "none";
+    usedLocations.add(target);
+    cityNameEl.innerText = `Ziel: ${target.name}`;
 
-    if(round === 1) {
-      gameStartTime = new Date();
-    }
+    startTimer();
   }
 
-  // Popup anzeigen neben Klickpunkt (leicht nach rechts versetzt)
-  function showPopup(text, latlng) {
-    const point = map.latLngToContainerPoint(latlng);
-    popup.style.left = (point.x + 15) + "px";
-    popup.style.top = (point.y - 20) + "px";
-    popup.textContent = text;
-    popup.style.display = "block";
+  function startTimer() {
+    if (timer) clearInterval(timer);
+    timer = setInterval(() => {
+      timeLeft--;
+      timerEl.innerText = `Zeit: ${timeLeft}`;
+      if (timeLeft <= 0) {
+        clearInterval(timer);
+        scoreUpdate(false);
+        nextBtn.disabled = false;
+        cityNameEl.innerText = `Zeit abgelaufen! Ziel war: ${target.name}`;
+      }
+    }, 1000);
   }
 
-  // Nach dem letzten Ziel Zusammenfassung anzeigen (bleibt sichtbar)
-  function showSummary() {
-    let gameEndTime = new Date();
-    let durationSec = Math.round((gameEndTime - gameStartTime) / 1000);
-    if(score > highscore) {
-      highscore = score;
-      highscoreSpan.textContent = `Highscore: ${highscore}`;
-    }
-    summaryPopup.innerHTML = `Spiel vorbei!<br/>Gesamtpunktzahl: ${score}<br/>Benötigte Zeit: ${durationSec} Sekunden`;
-    summaryPopup.style.display = "block";
+  function scoreUpdate(correct) {
+    // Wenn nötig, weitere Logik für Punkte hier
   }
 
-  // Karte Klick-Handler
-  map.on("click", function (e) {
-    if(!target) return;
+  function onMapClick(e) {
+    if (!target || nextBtn.disabled === false) return; // Warte bis nächste Runde
+    clearInterval(timer);
 
-    if(currentLine) {
-      map.removeLayer(currentLine);
-      currentLine = null;
-    }
-    if(currentMarker) {
-      map.removeLayer(currentMarker);
-      currentMarker = null;
-    }
+    const guess = e.latlng;
+    const dist = guess.distanceTo([target.lat, target.lon]);
+    const maxDistance = 200000; // ca 200km max für Punktevergabe
+    let points = Math.max(0, Math.round((maxDistance - dist) / 1000)); // Punkte je näher desto mehr
 
-    // Entfernung berechnen (in km)
-    const distance = map.distance(e.latlng, L.latLng(target.lat, target.lon)) / 1000;
-    const points = calcPoints(distance);
     score += points;
-    scoreSpan.textContent = `Punkte: ${score}`;
+    scoreEl.innerText = `Punkte: ${score}`;
 
-    // Linie vom Klick zum Ziel
-    currentLine = L.polyline([e.latlng, [target.lat, target.lon]], {
-      color: "#FF5733",
-      weight: 4,
-      opacity: 0.9
+    // Linie zeichnen
+    if (currentLine) map.removeLayer(currentLine);
+    if (currentArrowMarker) map.removeLayer(currentArrowMarker);
+
+    currentLine = L.polyline([guess, [target.lat, target.lon]], {color: 'red'}).addTo(map);
+
+    // Fadenkreuz als großer roter Kreis am Ziel
+    currentArrowMarker = L.circleMarker([target.lat, target.lon], {
+      color: 'red',
+      radius: 15,
+      weight: 3,
+      fill: false,
     }).addTo(map);
 
-    // Fadenkreuz am Ziel
-    currentMarker = L.marker([target.lat, target.lon], { icon: crosshairIcon }).addTo(map);
+    showPopup(guess, `Distanz: ${(dist/1000).toFixed(1)} km, Punkte: ${points}`);
 
-    // Popup neben Klickpunkt
-    showPopup(`${target.name} war ${distance.toFixed(1)} km entfernt. Punkte: ${points}`, e.latlng);
-
-    target = null;
     nextBtn.disabled = false;
 
-    // Wenn letzte Runde, Zusammenfassung mit 4s Verzögerung anzeigen
-    if(round === maxRounds) {
-      if(summaryTimeout) clearTimeout(summaryTimeout);
-      summaryTimeout = setTimeout(showSummary, 4000);
+    // Falls letzte Runde, Zusammenfassung automatisch in 4,5s zeigen
+    if(round === maxRounds){
+      setTimeout(showSummary, 4500);
+      nextBtn.disabled = true;
+      newGameBtn.disabled = false;
     }
-  });
+  }
 
-  nextBtn.addEventListener("click", () => {
-    nextBtn.disabled = true;
-    popup.style.display = "none";
-    if(currentLine) {
+  function showPopup(latlng, text) {
+    const point = map.latLngToContainerPoint(latlng);
+    popup.style.left = (point.x + 20) + 'px';
+    popup.style.top = point.y + 'px';
+    popup.innerText = text;
+    popup.style.display = 'block';
+  }
+
+  function clearLineAndMarker() {
+    if (currentLine) {
       map.removeLayer(currentLine);
       currentLine = null;
     }
-    if(currentMarker) {
-      map.removeLayer(currentMarker);
-      currentMarker = null;
+    if (currentArrowMarker) {
+      map.removeLayer(currentArrowMarker);
+      currentArrowMarker = null;
     }
-    nextRound();
-  });
+    popup.style.display = 'none';
+  }
 
-  newGameBtn.addEventListener("click", () => {
-    newGame();
-  });
+  function showSummary() {
+    highscore = Math.max(highscore, score);
+    highscoreEl.innerText = `Highscore: ${highscore}`;
+    summaryPopup.innerHTML = `<strong>Spiel beendet!</strong><br>Punkte: ${score}<br>Zeit gesamt: ${(maxRounds * 15 - timeLeft)} Sekunden`;
+    summaryPopup.style.display = 'block';
+  }
 
-  // Spiel direkt starten
-  newGame();
+  function changeMapStyle() {
+    const style = styleSelector.value;
+    document.body.className = style;
+
+    if (baseLayer) {
+      map.removeLayer(baseLayer);
+    }
+    baseLayer = baseLayers[style];
+    baseLayer.addTo(map);
+  }
+
+  function shuffleArray(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      let j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+  }
+
+  map.on('click', onMapClick);
+
+  // Spiel starten
+  startNewGame();
+
 </script>
 </body>
 </html>
